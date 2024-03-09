@@ -1,7 +1,5 @@
 module Main where
 
-import Daml.Script
-
 type AssetId = ContractId Asset
 
 template Asset
@@ -19,26 +17,3 @@ template Asset
       controller owner
       do create this with
            owner = newOwner
-
-setup : Script AssetId
-setup = script do
--- user_setup_begin
-  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Alice")
-  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
-  aliceId <- validateUserId "alice"
-  bobId <- validateUserId "bob"
-  createUser (User aliceId (Some alice)) [CanActAs alice]
-  createUser (User bobId (Some bob)) [CanActAs bob]
--- user_setup_end
-
-  aliceTV <- submit alice do
-    createCmd Asset with
-      issuer = alice
-      owner = alice
-      name = "TV"
-
-  bobTV <- submit alice do
-    exerciseCmd aliceTV Give with newOwner = bob
-
-  submit bob do
-    exerciseCmd bobTV Give with newOwner = alice
