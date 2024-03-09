@@ -1,19 +1,170 @@
 module Main where
 
-type AssetId = ContractId Asset
+import DA.Date
+import DA.Optional
 
-template Asset
+data PersonalRecord = PersonalRecord 
   with
-    issuer : Party
-    owner  : Party
-    name   : Text
+    id: Int
+    name: Text
+    email: Text
+    birthDate: Date
+  deriving (Show, Eq)
+
+
+-- Service that create an empty account request
+template BankService
+  with 
+    bank: Party
+    customer: Party
   where
-    ensure name /= ""
-    signatory issuer
-    observer owner
-    choice Give : AssetId
+    signatory bank
+    observer customer
+    
+    nonconsuming choice CreateBlankAccountRequest: ContractId AccountRequest
+      controller customer
+      do
+        let blankRecord = PersonalRecord 0 "" "" (date 1990 Jan 01)
+        create AccountRequest
+            with 
+                customer 
+                info = blankRecord
+                bank
+
+-- request to open a trader account
+template AccountRequest
+  with
+    customer : Party
+    info: PersonalRecord
+    bank : Party
+  where
+    signatory customer, bank
+    
+    -- A customer request the opening of a trader account
+    choice OpenTradeAccount: ContractId AccountRequest
+      with 
+        traderAccount: Party
+        traderInfo: PersonalRecord
+      controller customer
+        do
+          create AccountRequest
+            with
+              customer = traderAccount
+              info = traderInfo
+              bank
+
+    -- Bank accept 
+    choice ReviewApplication: Optional (ContractId TraderAccount)
+      controller bank 
+        do 
+          traderAccount <- lookupByKey @TraderAccount (bank, info.id)
+          now <- getTime
+          if (isSome traderAccount) then 
+              return None
+          else do
+            traderAccount <- create TraderAccount
+              with
+                trader = customer
+                bank
+                id = info.id
+                name = info.name
+                email = info.email
+            return (Some traderAccount)
+
+
+data OrderType = BUY | SELL
+  deriving (Eq, Show)
+
+data Currency = EUR | USD
+  deriving (Eq, Show)
+
+template TraderCurrencyHoldings
+  with
+    trader: Party
+    currency: Currency
+    amount: Decimal
+  where
+    signatory trader
+    key (trader, currency): (Party, Currency)
+    maintainer key._1
+
+
+template TraderAccount
+  with 
+    trader: Party
+    bank: Party
+    id: Int
+    name: Text
+    email: Text
+
+  where 
+    signatory trader, bank
+    key (bank, id): (Party, Int)
+    maintainer key._1
+
+    nonconsuming choice CreateOffer: ContractId TradeOffer
       with
-        newOwner : Party
-      controller owner
-      do create this with
-           owner = newOwner
+        side: OrderType
+        ccy1: Currency
+        ccy2: Currency
+        amount: Decimal
+        price: Decimal
+      controller trader
+        do
+          create TradeOffer with
+                trader
+                bank
+                side
+                ccy1
+                ccy2
+                amount
+                price
+
+
+template TradeOffer
+  with
+    trader: Party
+    bank: Party
+    side: OrderType
+    ccy1: Currency
+    ccy2: Currency
+    amount: Decimal
+    price: Decimal
+  where
+    signatory bank
+    observer trader
+
+    choice CancelOffer: ()
+      controller trader
+      do
+        assertMsg "You are not the owner of this trade offer" (this.trader == trader)
+        archive self
+
+    nonconsuming choice AcceptOffer: ()
+      with
+        counterparty: Party
+      controller counterparty
+      do
+         -- Fetch trader currency holdings for both currencies
+        --let holdings1 = fetchByKey @TraderCurrencyHoldings (trader, this.ccy1)
+        --let holdings2 = fetchByKey @TraderCurrencyHoldings (trader, this.ccy2)
+        -- Ensure trader has sufficient funds to accept the offer
+        --assertMsg "Insufficient funds to accept the offer" (isSome holdings1._1 && fromSome (fromSome holdings1._2).amount >= this.amount)
+        -- Calculate the quantity of ccy2 to be exchanged
+        --let exchangedAmount = this.amount * this.price
+        -- Ensure trader has sufficient ccy2 to make the exchange
+        --assertMsg "Insufficient funds to make the exchange" (isSome holdings2 && fromSome (fromSome holdings2._2).amount >= exchangedAmount)
+        -- Archive previous trader currency holdings for both currencies
+
+        ---let archivedHoldings1 = case holdings1 of
+                                  ---None -> []
+                                  ---Some oldHoldings1 -> [archive oldHoldings1]
+        ---let archivedHoldings2 = case holdings2 of
+                                  ---None -> []
+                                  ---Some oldHoldings2 -> [archive oldHoldings2]
+        -- Update trader currency holdings
+        ---let newHoldings1 = create TraderCurrencyHoldings with trader = trader; currency = self.ccy1; amount = fromSome (fromSome holdings1._2).amount - self.amount
+        ---let newHoldings2 = create TraderCurrencyHoldings with trader = trader; currency = self.ccy2; amount = fromSome (fromSome holdings2._2).amount + exchangedAmount
+        return ()
+
+

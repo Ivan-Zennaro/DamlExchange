@@ -3,25 +3,7 @@ module Test where
 import Main
 import Daml.Script
 
-setup : Script AssetId
+setup : Script ()
 setup = script do
--- user_setup_begin
-  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Alice")
-  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
-  aliceId <- validateUserId "alice"
-  bobId <- validateUserId "bob"
-  createUser (User aliceId (Some alice)) [CanActAs alice]
-  createUser (User bobId (Some bob)) [CanActAs bob]
--- user_setup_end
+    return()
 
-  aliceTV <- submit alice do
-    createCmd Asset with
-      issuer = alice
-      owner = alice
-      name = "TV"
-
-  bobTV <- submit alice do
-    exerciseCmd aliceTV Give with newOwner = bob
-
-  submit bob do
-    exerciseCmd bobTV Give with newOwner = alice
