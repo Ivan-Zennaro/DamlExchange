@@ -1,0 +1,29 @@
+module Setup where
+
+import Exchange
+import Daml.Script
+
+setup: Script()
+setup = do
+
+  -- 1. Allocate parties with proper display name
+  alice <- allocatePartyWithHint "Alice" (PartyIdHint "Ali")
+  bob <- allocatePartyWithHint "Bob" (PartyIdHint "Bob")
+  bank <- allocatePartyWithHint "Bank" (PartyIdHint "Bank")
+
+  -- 2. Create userId starting from text
+  alice <- validateUserId "Alice"
+  bob <- validateUserId "Bob"
+  bank <- validateUserId "Bank"
+
+  -- 3. Create user with the given rights
+  createUser (User alice (Some customer)) [CanActAs customer]
+  createUser (User bob (Some customer)) [CanActAs customer]
+  createUser (User bank (Some bank)) [CanActAs bank]
+
+  submit airline do
+    createCmd BankService with 
+      bank = airline 
+      customer = customer
+
+  return ()

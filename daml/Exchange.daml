@@ -1,4 +1,4 @@
-module Main where
+module Exchange where
 
 import DA.Date
 import DA.Optional
@@ -112,30 +112,33 @@ template TraderAccount
       controller trader
         do
           create TradeOffer with
-                trader
+                offerer = trader
                 bank
                 side
                 ccy1
                 ccy2
                 amount
                 price
+                reader = trader
 
 
 template TradeOffer
   with
-    trader: Party
+    offerer: Party
     bank: Party
     side: OrderType
     ccy1: Currency
     ccy2: Currency
     amount: Decimal
     price: Decimal
+
+    reader: Party
   where
-    signatory bank
-    observer trader
+    signatory bank, offerer
+    observer reader
 
     choice CancelOffer: ()
-      controller trader
+      controller offerer
       do
         assertMsg "You are not the owner of this trade offer" (this.trader == trader)
         archive self
